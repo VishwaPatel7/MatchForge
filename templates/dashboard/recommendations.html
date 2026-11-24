@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Ranked Recommendations{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h6 class="text-muted mb-0">Deterministic hybrid ranking with zero-tolerance hard constraint validation</h6>
+    </div>
+    <button class="btn btn-primary btn-sm fw-semibold" id="recomputeRecsBtn">
+        <i class="bi bi-arrow-clockwise me-1"></i> Recalculate Recommendations
+    </button>
+</div>
+
+<div class="row g-4">
+    <div class="col-12">
+        {% if recommendations %}
+            {% for rec in recommendations %}
+                <div class="mf-card mb-3 p-4">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <h5 class="fw-bold mb-0">{{ rec.opportunity.title }}</h5>
+                                {% if rec.overall_score >= 80 %}
+                                    <span class="score-badge high"><i class="bi bi-check-circle-fill"></i> {{ rec.overall_score }}% Match</span>
+                                {% elif rec.overall_score >= 60 %}
+                                    <span class="score-badge medium"><i class="bi bi-info-circle-fill"></i> {{ rec.overall_score }}% Match</span>
+                                {% else %}
+                                    <span class="score-badge low">{{ rec.overall_score }}% Match</span>
+                                {% endif %}
+
+                                {% if not rec.passed_hard_filters %}
+                                    <span class="dealbreaker-badge"><i class="bi bi-shield-x"></i> Dealbreaker Violated</span>
+                                {% endif %}
+                            </div>
+                            <div class="text-muted small mb-2">
+                                <i class="bi bi-building me-1"></i><strong>{{ rec.opportunity.company }}</strong> &bull;
+                                <i class="bi bi-geo-alt me-1"></i>{{ rec.opportunity.location }} ({{ rec.opportunity.work_mode }}) &bull;
+                                <i class="bi bi-cash-stack me-1"></i>{{ rec.opportunity.currency }} {{ rec.opportunity.min_salary_or_stipend|floatformat:0 }} - {{ rec.opportunity.max_salary_or_stipend|floatformat:0 }}
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleSaveOpportunity('{{ rec.opportunity.id }}', this)">
+                                <i class="bi bi-bookmark"></i> Save
+                            </button>
+                            <a href="{% url 'opportunity-detail' rec.opportunity.id %}" class="btn btn-sm btn-primary">
+                                Why It Fits <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Score Breakdown Pills -->
+                    <div class="d-flex flex-wrap gap-2 py-2 my-2 border-top border-bottom small">
+                        <span class="badge bg-light text-dark border">Semantic: <strong>{{ rec.semantic_score }}%</strong></span>
+                        <span class="badge bg-light text-dark border">Skills: <strong>{{ rec.skill_score }}%</strong></span>
+                        <span class="badge bg-light text-dark border">Role: <strong>{{ rec.role_score }}%</strong></span>
+                        <span class="badge bg-light text-dark border">Experience: <strong>{{ rec.experience_score }}%</strong></span>
+                        <span class="badge bg-light text-dark border">Location: <strong>{{ rec.location_score }}%</strong></span>
+                        <span class="badge bg-light text-dark border">Preferences: <strong>{{ rec.preference_score }}%</strong></span>
+                    </div>
+
+                    <!-- Factual Grounded Explanation -->
+                    {% if rec.explanation %}
+                        <div class="mt-2 text-muted small bg-light p-3 rounded">
+                            <div class="fw-semibold text-dark mb-1"><i class="bi bi-chat-left-quote text-primary me-1"></i> AI Explanation:</div>
+                            <p class="mb-2">{{ rec.explanation.natural_language_explanation }}</p>
+                            <div class="d-flex flex-wrap gap-1">
+                                {% for ms in rec.explanation.matched_skills %}
+                                    <span class="skill-tag matched"><i class="bi bi-check2"></i> {{ ms }}</span>
+                                {% endfor %}
+                                {% for mis in rec.explanation.missing_skills %}
+                                    <span class="skill-tag missing"><i class="bi bi-dash"></i> {{ mis }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if rec.exclusion_reasons %}
+                        <div class="alert alert-danger mt-3 mb-0 py-2 small">
+                            <strong><i class="bi bi-exclamation-octagon-fill me-1"></i> Dealbreaker Violations:</strong>
+                            <ul class="mb-0 ps-3">
+                                {% for reason in rec.exclusion_reasons %}
+                                    <li>{{ reason }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="mf-card text-center py-5 text-muted">
+                <i class="bi bi-stars display-6 d-block mb-2"></i>
+                <h5>No recommendations available yet</h5>
+                <p class="small mb-3">Upload your resume to allow MatchForge to calculate deterministic scores.</p>
+                <a href="{% url 'resume' %}" class="btn btn-primary btn-sm">Upload Resume</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.getElementById('recomputeRecsBtn').addEventListener('click', async function() {
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Recomputing...';
+        try {
+            const resp = await fetch('/api/v1/recommendations/generate/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            if (resp.ok) {
+                showToast("Recommendations recalculated successfully!", "success");
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                showToast("Failed to recalculate recommendations.", "error");
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Recalculate Recommendations';
+            }
+        } catch (err) {
+            showToast("Network error.", "error");
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> Recalculate Recommendations';
+        }
+    });
+</script>
+{% endblock %}

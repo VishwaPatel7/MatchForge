@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: matchforge_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: matchforge_db
+      POSTGRES_USER: matchforge_user
+      POSTGRES_PASSWORD: matchforge_secure_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matchforge_user -d matchforge_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: matchforge_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: matchforge_web
+    restart: always
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py ingest_opportunities --count 350 &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+    volumes:
+      - media_data:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=matchforge-production-docker-secret-key-change-in-real-prod
+      - ALLOWED_HOSTS=*
+      - DATABASE_URL=postgresql://matchforge_user:matchforge_secure_password@db:5432/matchforge_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_ALWAYS_EAGER=False
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_worker:
+    build: .
+    container_name: matchforge_celery
+    restart: always
+    command: celery -A config worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://matchforge_user:matchforge_secure_password@db:5432/matchforge_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_ALWAYS_EAGER=False
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  media_data:

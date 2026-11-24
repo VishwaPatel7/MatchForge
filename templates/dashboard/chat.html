@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Conversational AI Career Agent{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Sessions Sidebar -->
+    <div class="col-lg-3">
+        <div class="mf-card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0">Conversations</h6>
+                <button class="btn btn-sm btn-primary" id="newSessionBtn">
+                    <i class="bi bi-plus-lg"></i> New
+                </button>
+            </div>
+            <div class="list-group list-group-flush" id="sessionList" style="max-height: 480px; overflow-y: auto;">
+                {% for conv in conversations %}
+                    <a href="?session={{ conv.id }}" class="list-group-item list-group-item-action py-2 px-2 border-0 rounded mb-1 {% if conv.id == active_conversation.id %}bg-light text-primary fw-semibold{% endif %}">
+                        <div class="text-truncate small"><i class="bi bi-chat-left-text me-1"></i> {{ conv.title }}</div>
+                        <div class="text-muted" style="font-size: 0.7rem;">{{ conv.last_activity|date:"M d, H:i" }}</div>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Quick Goal Prompts -->
+        <div class="mf-card p-3">
+            <h6 class="fw-bold mb-2 small"><i class="bi bi-lightbulb-fill text-warning me-1"></i>Quick Prompts</h6>
+            <div class="d-flex flex-column gap-1">
+                <button class="btn btn-outline-secondary btn-sm text-start prompt-chip" style="font-size: 0.78rem;">
+                    "I want a remote backend internship using Python and Django. No unpaid work."
+                </button>
+                <button class="btn btn-outline-secondary btn-sm text-start prompt-chip" style="font-size: 0.78rem;">
+                    "What are my biggest skill gaps for high-paying roles?"
+                </button>
+                <button class="btn btn-outline-secondary btn-sm text-start prompt-chip" style="font-size: 0.78rem;">
+                    "I am now open to relocating to Bangalore for startup roles."
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Chat Window -->
+    <div class="col-lg-9">
+        <div class="mf-card chat-window p-3">
+            <div class="d-flex justify-content-between align-items-center pb-2 mb-2 border-bottom">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-success-subtle text-success p-2 rounded-circle"><i class="bi bi-robot"></i></span>
+                    <div>
+                        <h6 class="fw-bold mb-0">MatchForge Assistant</h6>
+                        <span class="text-muted" style="font-size: 0.75rem;">Guarded Tool Execution &amp; Memory Active</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages Stream -->
+            <div class="chat-messages" id="chatMessages">
+                <!-- Initial Assistant greeting -->
+                <div class="chat-bubble assistant">
+                    <div>Hello {{ profile.full_name|default:user.username }}! I am MatchForge, your AI career discovery assistant. I can extract your target roles and work modes, enforce dealbreakers (like zero unpaid work), analyze skill gaps, and search matching jobs. How can I help you today?</div>
+                </div>
+
+                <!-- Existing messages for active conversation -->
+                {% for msg in active_conversation.messages.all %}
+                    <div class="chat-bubble {% if msg.sender_type == 'USER' %}user{% else %}assistant{% endif %}">
+                        <div>{{ msg.content }}</div>
+                        {% if msg.tool_calls %}
+                            <div class="mt-2 pt-2 border-top border-light-subtle">
+                                {% for tc in msg.tool_calls %}
+                                    <span class="tool-badge-pill"><i class="bi bi-gear-fill"></i> Executed: {{ tc.function.name }}()</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <!-- Input Form -->
+            <div class="pt-3 border-top mt-2">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="chatInput" placeholder="Describe your dream role, preferred tech stack, locations or dealbreakers..." autofocus>
+                    <button class="btn btn-primary px-4 fw-semibold" id="sendBtn">
+                        <i class="bi bi-send-fill me-1"></i> Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/chat_agent.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const conversationId = "{{ active_conversation.id }}";
+        const agent = new MatchForgeAgent(conversationId, 'chatMessages', 'chatInput', 'sendBtn');
+
+        // Quick prompt chips
+        document.querySelectorAll('.prompt-chip').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const text = this.innerText.replace(/"/g, '').trim();
+                document.getElementById('chatInput').value = text;
+                agent.sendMessage();
+            });
+        });
+
+        // New Session button
+        document.getElementById('newSessionBtn').addEventListener('click', async function() {
+            const resp = await fetch('/api/v1/agent/conversations/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify({ title: 'New Discovery Session' })
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                window.location.href = `?session=${data.id}`;
+            }
+        });
+    });
+</script>
+{% endblock %}

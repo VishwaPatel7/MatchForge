@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block page_title %}{{ opportunity.title }} @ {{ opportunity.company }}{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left: Opportunity Specifications -->
+    <div class="col-lg-8">
+        <div class="mf-card mb-4">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h4 class="fw-bold mb-1">{{ opportunity.title }}</h4>
+                    <div class="text-muted">
+                        <i class="bi bi-building me-1"></i><strong>{{ opportunity.company }}</strong> &bull;
+                        <i class="bi bi-geo-alt me-1"></i>{{ opportunity.location }} &bull;
+                        <span class="badge bg-secondary-subtle text-secondary">{{ opportunity.work_mode }}</span> &bull;
+                        <span class="badge bg-light text-dark border">{{ opportunity.employment_type }}</span>
+                    </div>
+                </div>
+                <div>
+                    <button class="btn btn-outline-secondary" onclick="toggleSaveOpportunity('{{ opportunity.id }}', this)">
+                        {% if is_saved %}
+                            <i class="bi bi-bookmark-fill text-primary"></i> Saved
+                        {% else %}
+                            <i class="bi bi-bookmark"></i> Save Role
+                        {% endif %}
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-3 bg-light rounded d-flex flex-wrap gap-4 mb-4">
+                <div>
+                    <div class="text-muted small">Compensation / Stipend</div>
+                    <div class="fw-bold">
+                        {% if opportunity.is_unpaid %}
+                            <span class="text-danger">Unpaid Opportunity</span>
+                        {% else %}
+                            {{ opportunity.currency }} {{ opportunity.min_salary_or_stipend|floatformat:0 }} - {{ opportunity.max_salary_or_stipend|floatformat:0 }}
+                        {% endif %}
+                    </div>
+                </div>
+                <div>
+                    <div class="text-muted small">Experience Level</div>
+                    <div class="fw-bold">{{ opportunity.min_experience_months }} - {{ opportunity.max_experience_months }} months</div>
+                </div>
+                <div>
+                    <div class="text-muted small">Posting Date</div>
+                    <div class="fw-bold">{{ opportunity.posted_date|date:"M d, Y"|default:"Recently Added" }}</div>
+                </div>
+            </div>
+
+            <h6 class="fw-bold mb-2">Role Overview & Responsibilities</h6>
+            <p class="text-muted" style="line-height: 1.7;">{{ opportunity.description }}</p>
+
+            <h6 class="fw-bold mb-2 mt-4">Required Skills</h6>
+            <div class="mb-3">
+                {% for s in opportunity.required_skills %}
+                    <span class="skill-tag matched">{{ s }}</span>
+                {% endfor %}
+            </div>
+
+            {% if opportunity.preferred_skills %}
+                <h6 class="fw-bold mb-2 mt-4">Preferred Skills</h6>
+                <div class="mb-4">
+                    {% for ps in opportunity.preferred_skills %}
+                        <span class="skill-tag">{{ ps }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="pt-3 border-top d-flex gap-3">
+                <a href="{{ opportunity.apply_url|default:'#' }}" target="_blank" class="btn btn-primary px-4 fw-semibold">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Apply Directly
+                </a>
+                <a href="{% url 'opportunities' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Discovery
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Explainable AI Match Analysis -->
+    <div class="col-lg-4">
+        <div class="mf-card mb-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-award-fill text-primary me-2"></i>MatchForge Evaluation</h6>
+
+            {% if recommendation %}
+                <div class="text-center py-3 border-bottom mb-3">
+                    <div class="display-4 fw-bold {% if recommendation.overall_score >= 80 %}text-success{% elif recommendation.overall_score >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                        {{ recommendation.overall_score }}%
+                    </div>
+                    <div class="text-muted small fw-semibold">Overall Compatibility Fit</div>
+                    {% if not recommendation.passed_hard_filters %}
+                        <div class="dealbreaker-badge mt-2 d-inline-block"><i class="bi bi-shield-x"></i> Violates Active Dealbreaker</div>
+                    {% endif %}
+                </div>
+
+                <!-- Grounded Explanation -->
+                {% if recommendation.explanation %}
+                    <div class="mb-3">
+                        <h6 class="small fw-bold text-uppercase text-muted">Why It Fits You</h6>
+                        <p class="small text-muted">{{ recommendation.explanation.natural_language_explanation }}</p>
+                    </div>
+
+                    {% if recommendation.explanation.matched_skills %}
+                        <div class="mb-3">
+                            <h6 class="small fw-bold text-success text-uppercase">Matched Skills</h6>
+                            <div>
+                                {% for ms in recommendation.explanation.matched_skills %}
+                                    <span class="skill-tag matched"><i class="bi bi-check2"></i> {{ ms }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if recommendation.explanation.missing_skills %}
+                        <div class="mb-3">
+                            <h6 class="small fw-bold text-danger text-uppercase">Missing / Required Skills</h6>
+                            <div>
+                                {% for mis in recommendation.explanation.missing_skills %}
+                                    <span class="skill-tag missing"><i class="bi bi-dash"></i> {{ mis }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                {% endif %}
+
+                <!-- Factor Breakdown Bar Chart -->
+                <div class="mt-4 pt-3 border-top">
+                    <h6 class="small fw-bold text-uppercase text-muted mb-2">Score Breakdown</h6>
+                    <div style="height: 180px;">
+                        <canvas id="factorBreakdownChart"></canvas>
+                    </div>
+                </div>
+
+            {% else %}
+                <div class="text-center py-4 text-muted small">
+                    <p>No individual recommendation score calculated yet.</p>
+                    <a href="{% url 'recommendations' %}" class="btn btn-sm btn-outline-primary">Calculate Fit Score</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if recommendation %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('factorBreakdownChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Semantic', 'Skills', 'Role', 'Exp', 'Location', 'Prefs'],
+                datasets: [{
+                    label: 'Score (0-100)',
+                    data: [
+                        {{ recommendation.semantic_score }},
+                        {{ recommendation.skill_score }},
+                        {{ recommendation.role_score }},
+                        {{ recommendation.experience_score }},
+                        {{ recommendation.location_score }},
+                        {{ recommendation.preference_score }}
+                    ],
+                    backgroundColor: ['#4f46e5', '#10b981', '#06b6d4', '#f59e0b', '#8b5cf6', '#ec4899'],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100, ticks: { font: { size: 10 } } },
+                    x: { ticks: { font: { size: 10 } } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    });
+</script>
+{% endif %}
+{% endblock %}

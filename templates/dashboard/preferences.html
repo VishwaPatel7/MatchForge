@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Preferences & Memory Management{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Active Preferences & Dealbreakers -->
+    <div class="col-lg-5">
+        <div class="mf-card mb-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-shield-lock-fill text-primary me-2"></i>Persistent Constraints & Preferences</h6>
+            <p class="text-muted small">MatchForge remembers your preferences across conversations. When preferences change, existing keys are updated and versioned instead of creating duplicate contradictions.</p>
+
+            {% if preferences %}
+                <div class="list-group list-group-flush">
+                    {% for pref in preferences %}
+                        <div class="list-group-item px-0 py-3 border-bottom">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold text-dark">{{ pref.preference_key }}</span>
+                                {% if pref.is_hard_dealbreaker %}
+                                    <span class="dealbreaker-badge"><i class="bi bi-shield-x"></i> HARD DEALBREAKER</span>
+                                {% else %}
+                                    <span class="badge bg-light text-dark border">Priority: {{ pref.priority_level }}/5</span>
+                                {% endif %}
+                            </div>
+                            <div class="text-muted small mb-1">
+                                Value: <code>{{ pref.preference_value }}</code>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted" style="font-size: 0.72rem;">
+                                <span>Version: <strong>v{{ pref.version }}</strong></span>
+                                <span>Updated: {{ pref.updated_at|date:"M d, Y H:i" }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted small mb-0">No preferences recorded yet. Chat with the AI Agent to establish preferences.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Audit History Log -->
+    <div class="col-lg-7">
+        <div class="mf-card">
+            <h6 class="fw-bold mb-3"><i class="bi bi-clock-history text-primary me-2"></i>Preference Conflict Resolution &amp; Version History</h6>
+            <p class="text-muted small">Complete audit trail of every preference mutation and conversational update origin.</p>
+
+            {% if history %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle" style="font-size: 0.85rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Preference</th>
+                                <th>Previous Value</th>
+                                <th>New Value</th>
+                                <th>Version</th>
+                                <th>Updated At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for h in history %}
+                                <tr>
+                                    <td class="fw-semibold">{{ h.preference.preference_key }}</td>
+                                    <td class="text-muted text-truncate" style="max-width: 140px;">{{ h.old_value|default:"None" }}</td>
+                                    <td class="text-primary fw-semibold text-truncate" style="max-width: 160px;">{{ h.new_value }}</td>
+                                    <td><span class="badge bg-secondary-subtle text-secondary">v{{ h.version }}</span></td>
+                                    <td class="text-muted">{{ h.changed_at|date:"M d, H:i" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted small mb-0">No preference history recorded yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block public_content %}
+<div class="row align-items-center justify-content-center min-vh-75 py-5">
+    <div class="col-lg-8 text-center">
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill fw-semibold mb-3">
+            <i class="bi bi-stars"></i> Next-Generation AI Opportunity Discovery
+        </span>
+        <h1 class="display-4 fw-bold tracking-tight mb-3">
+            Find opportunities that <span class="text-primary">actually fit you</span>.
+        </h1>
+        <p class="lead text-muted mb-4 px-lg-5">
+            Beyond superficial keyword matching. MatchForge understands your skills, priorities, and dealbreakers using semantic embeddings, deterministic multi-factor ranking, and guarded conversational AI.
+        </p>
+
+        <div class="d-flex justify-content-center gap-3 mb-5">
+            <a href="{% url 'register' %}" class="btn btn-primary btn-lg px-4 fw-semibold">
+                Get Started Free <i class="bi bi-arrow-right ms-1"></i>
+            </a>
+            <a href="{% url 'login' %}" class="btn btn-outline-secondary btn-lg px-4">
+                Sign In
+            </a>
+        </div>
+
+        <div class="row g-4 text-start mt-4">
+            <div class="col-md-4">
+                <div class="mf-card h-100 p-4">
+                    <div class="stat-icon primary mb-3"><i class="bi bi-cpu"></i></div>
+                    <h5 class="fw-bold">Conversational AI Agent</h5>
+                    <p class="text-muted small">Talk naturally to an intelligent career agent with persistent memory across multi-turn sessions.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="mf-card h-100 p-4">
+                    <div class="stat-icon success mb-3"><i class="bi bi-shield-check"></i></div>
+                    <h5 class="fw-bold">Zero-Tolerance Hard Filters</h5>
+                    <p class="text-muted small">Strictly eliminates unpaid work, excluded companies, or prohibited locations with guaranteed compliance.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="mf-card h-100 p-4">
+                    <div class="stat-icon accent mb-3"><i class="bi bi-graph-up-arrow"></i></div>
+                    <h5 class="fw-bold">Explainable Recommendations</h5>
+                    <p class="text-muted small">Every match percentage is backed by verifiable skill overlap, experience curves, and evidence breakdowns.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-5 text-muted small">
+            <span>Currently indexing <strong>{{ total_jobs }}</strong> active opportunities & internships</span>
+        </div>
+    </div>
+</div>
+{% endblock %}

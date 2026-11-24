@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Discover Opportunities{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Filter Sidebar -->
+    <div class="col-lg-3">
+        <div class="mf-card p-3">
+            <h6 class="fw-bold mb-3"><i class="bi bi-funnel-fill text-primary me-2"></i>Filters</h6>
+            
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">Work Mode</label>
+                <select class="form-select form-select-sm" id="filterWorkMode">
+                    <option value="">All Work Modes</option>
+                    <option value="Remote">Remote</option>
+                    <option value="Hybrid">Hybrid</option>
+                    <option value="Onsite">Onsite</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-semibold">City / Location</label>
+                <input type="text" class="form-control form-control-sm" id="filterLocation" placeholder="e.g. Bangalore, Pune">
+            </div>
+
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="filterNoUnpaid" checked>
+                <label class="form-check-label small fw-semibold" for="filterNoUnpaid">Exclude Unpaid Roles</label>
+            </div>
+
+            <button class="btn btn-primary btn-sm w-100 fw-semibold" id="applyFiltersBtn">
+                <i class="bi bi-search me-1"></i> Apply Filters
+            </button>
+        </div>
+
+        <!-- Selected for Compare -->
+        <div class="mf-card p-3" id="compareTray">
+            <h6 class="fw-bold mb-2 small"><i class="bi bi-arrow-left-right text-primary me-1"></i>Compare Selection (<span id="compareCount">0</span>/4)</h6>
+            <div id="compareList" class="small text-muted mb-2">Select jobs to compare side-by-side.</div>
+            <button class="btn btn-outline-primary btn-sm w-100 disabled" id="compareActionBtn">Compare Selected</button>
+        </div>
+    </div>
+
+    <!-- Results Area -->
+    <div class="col-lg-9">
+        <div class="mf-card p-3 mb-4">
+            <div class="input-group">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" class="form-control border-start-0 ps-0" id="searchQueryInput" placeholder="Try natural search: 'Scalable backend startup internship with Python and Django'...">
+                <button class="btn btn-primary px-4 fw-semibold" id="searchSubmitBtn">Search</button>
+            </div>
+            <div class="text-muted small mt-2">
+                <i class="bi bi-info-circle me-1"></i> Uses <strong>Hybrid Search</strong>: Combines dense vector cosine embeddings with BM25 keyword matching.
+            </div>
+        </div>
+
+        <!-- Opportunity Cards Container -->
+        <div id="opportunitiesContainer">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="text-muted small mt-2">Loading indexed opportunities...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let selectedForCompare = new Set();
+
+    async function loadOpportunities(query = '', filters = {}) {
+        const container = document.getElementById('opportunitiesContainer');
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="text-muted small mt-2">Executing hybrid search...</div>
+            </div>
+        `;
+
+        try {
+            const resp = await fetch('/api/v1/opportunities/search/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    query: query,
+                    filters: filters,
+                    limit: 20
+                })
+            });
+
+            const data = await resp.json();
+            if (!data.results || data.results.length === 0) {
+                container.innerHTML = `
+                    <div class="mf-card text-center py-5 text-muted">
+                        <i class="bi bi-briefcase display-6 d-block mb-2"></i>
+                        <h5>No opportunities match your criteria</h5>
+                        <p class="small mb-0">Try broadening your search query or loosening filter constraints.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = data.results.map(r => `
+                <div class="mf-card mb-3 p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <h5 class="fw-bold mb-0">${r.title}</h5>
+                                <span class="badge ${r.hybrid_score >= 70 ? 'bg-success' : 'bg-primary'}">${r.hybrid_score}% Relevance</span>
+                                ${r.is_unpaid ? '<span class="dealbreaker-badge">Unpaid</span>' : ''}
+                            </div>
+                            <div class="text-muted small mb-2">
+                                <i class="bi bi-building me-1"></i><strong>${r.company}</strong> &bull;
+                                <i class="bi bi-geo-alt me-1"></i>${r.location} (${r.work_mode}) &bull;
+                                <i class="bi bi-cash-stack me-1"></i>${r.stipend}
+                            </div>
+                            <div class="mb-3">
+                                ${(r.required_skills || []).map(s => `<span class="skill-tag">${s}</span>`).join('')}
+                            </div>
+                        </div>
+                        <div class="d-flex flex-column gap-2 text-end">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleSaveOpportunity('${r.id}', this)">
+                                <i class="bi bi-bookmark"></i> Save
+                            </button>
+                            <a href="/opportunities/${r.id}/" class="btn btn-sm btn-outline-primary">
+                                Full Details <i class="bi bi-arrow-right"></i>
+                            </a>
+                            <div class="form-check form-check-inline text-end mt-1">
+                                <input class="form-check-input compare-check" type="checkbox" value="${r.id}" data-title="${r.title}" onchange="toggleCompareCheck(this)">
+                                <label class="form-check-label small text-muted">Compare</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+        } catch (err) {
+            container.innerHTML = `<div class="alert alert-danger">Error loading opportunities. Please try again.</div>`;
+        }
+    }
+
+    function toggleCompareCheck(checkbox) {
+        const id = checkbox.value;
+        const title = checkbox.getAttribute('data-title');
+        if (checkbox.checked) {
+            if (selectedForCompare.size >= 4) {
+                checkbox.checked = false;
+                showToast("You can compare up to 4 opportunities at a time.", "warning");
+                return;
+            }
+            selectedForCompare.add(id);
+        } else {
+            selectedForCompare.delete(id);
+        }
+
+        document.getElementById('compareCount').innerText = selectedForCompare.size;
+        const actionBtn = document.getElementById('compareActionBtn');
+        if (selectedForCompare.size >= 2) {
+            actionBtn.classList.remove('disabled');
+            actionBtn.onclick = () => {
+                window.location.href = `/compare/?ids=${Array.from(selectedForCompare).join(',')}`;
+            };
+        } else {
+            actionBtn.classList.add('disabled');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadOpportunities();
+
+        document.getElementById('searchSubmitBtn').addEventListener('click', function() {
+            const q = document.getElementById('searchQueryInput').value.trim();
+            const filters = {};
+            const wm = document.getElementById('filterWorkMode').value;
+            const loc = document.getElementById('filterLocation').value.trim();
+            const noUnpaid = document.getElementById('filterNoUnpaid').checked;
+
+            if (wm) filters.work_mode = wm;
+            if (loc) filters.location = loc;
+            if (noUnpaid) filters.no_unpaid = true;
+
+            loadOpportunities(q, filters);
+        });
+
+        document.getElementById('applyFiltersBtn').addEventListener('click', function() {
+            document.getElementById('searchSubmitBtn').click();
+        });
+    });
+</script>
+{% endblock %}

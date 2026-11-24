@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+
+{% block page_title %}Side-by-Side Opportunity Comparison{% endblock %}
+
+{% block content %}
+<div class="mf-card mb-4 p-3">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h6 class="fw-bold mb-1"><i class="bi bi-arrow-left-right text-primary me-2"></i>Multi-Opportunity Trade-Off Matrix</h6>
+            <div class="text-muted small">Compare compensation, work mode, missing skills, and match alignment across roles.</div>
+        </div>
+        <a href="{% url 'opportunities' %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i> Add Roles from Discovery
+        </a>
+    </div>
+</div>
+
+<div id="comparisonContainer">
+    <div class="text-center py-5 text-muted">
+        <div class="spinner-border text-primary" role="status"></div>
+        <div class="small mt-2">Loading comparison data...</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', async function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        let ids = urlParams.get('ids');
+
+        if (!ids) {
+            // Fetch top 3 opportunities by default for instant demonstration
+            const searchResp = await fetch('/api/v1/opportunities/search/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ query: 'backend python internship', limit: 3 })
+            });
+            const searchData = await searchResp.json();
+            if (searchData.results && searchData.results.length >= 2) {
+                ids = searchData.results.slice(0, 3).map(r => r.id).join(',');
+            }
+        }
+
+        if (!ids) {
+            document.getElementById('comparisonContainer').innerHTML = `
+                <div class="mf-card text-center py-5 text-muted">
+                    <h5>No opportunities selected for comparison</h5>
+                    <p class="small">Go to Job Discovery, check the "Compare" box on 2 or more roles, and click "Compare Selected".</p>
+                    <a href="/opportunities/" class="btn btn-primary btn-sm">Discover Opportunities</a>
+                </div>
+            `;
+            return;
+        }
+
+        const idList = ids.split(',').filter(x => x.trim().length > 0);
+
+        try {
+            const resp = await fetch('/api/v1/opportunities/compare/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ opportunity_ids: idList })
+            });
+
+            const data = await resp.json();
+            if (!data.items || data.items.length === 0) {
+                document.getElementById('comparisonContainer').innerHTML = `<div class="alert alert-warning">No comparison data returned for selected IDs.</div>`;
+                return;
+            }
+
+            renderComparisonMatrix(data.items);
+        } catch (err) {
+            document.getElementById('comparisonContainer').innerHTML = `<div class="alert alert-danger">Error rendering comparison matrix.</div>`;
+        }
+    });
+
+    function renderComparisonMatrix(items) {
+        const colWidth = Math.floor(100 / items.length);
+        let html = `
+            <div class="mf-card p-0 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-bordered mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 180px;">Evaluation Factor</th>
+                                ${items.map(it => `
+                                    <th class="text-center" style="width: ${colWidth}%;">
+                                        <div class="fw-bold fs-6">${it.title}</div>
+                                        <div class="text-muted small">${it.company}</div>
+                                    </th>
+                                `).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="fw-semibold text-muted small">Match Score</td>
+                                ${items.map(it => `
+                                    <td class="text-center">
+                                        <span class="score-badge ${it.match_score >= 80 ? 'high' : it.match_score >= 60 ? 'medium' : 'low'} fs-6">
+                                            ${it.match_score ? it.match_score + '%' : 'Pending'}
+                                        </span>
+                                    </td>
+                                `).join('')}
+                            </tr>
+                            <tr>
+                                <td class="fw-semibold text-muted small">Compensation</td>
+                                ${items.map(it => `
+                                    <td class="text-center fw-bold ${it.is_unpaid ? 'text-danger' : 'text-dark'}">
+                                        ${it.stipend_range}
+                                    </td>
+                                `).join('')}
+                            </tr>
+                            <tr>
+                                <td class="fw-semibold text-muted small">Work Mode</td>
+                                ${items.map(it => `
+                                    <td class="text-center">
+                                        <span class="badge bg-secondary-subtle text-secondary">${it.work_mode}</span>
+                                    </td>
+                                `).join('')}
+                            </tr>
+                            <tr>
+                                <td class="fw-semibold text-muted small">Location</td>
+                                ${items.map(it => `<td class="text-center">${it.location}</td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td class="fw-semibold text-muted small">Employment Type</td>
+                                ${items.map(it => `<td class="text-center">${it.employment_type}</td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td class="fw-semibold text-muted small">Required Skills</td>
+                                ${items.map(it => `
+                                    <td>
+                                        ${(it.required_skills || []).map(s => `<span class="skill-tag">${s}</span>`).join('')}
+                                    </td>
+                                `).join('')}
+                            </tr>
+                            <tr>
+                                <td class="fw-semibold text-muted small">Missing Skills</td>
+                                ${items.map(it => `
+                                    <td>
+                                        ${(it.missing_skills || []).length > 0 
+                                            ? it.missing_skills.map(s => `<span class="skill-tag missing">${s}</span>`).join('')
+                                            : '<span class="text-success small fw-semibold"><i class="bi bi-check-all"></i> All core skills satisfied</span>'}
+                                    </td>
+                                `).join('')}
+                            </tr>
+                            <tr>
+                                <td class="fw-semibold text-muted small">Action</td>
+                                ${items.map(it => `
+                                    <td class="text-center">
+                                        <a href="/opportunities/${it.id}/" class="btn btn-sm btn-outline-primary">View Role</a>
+                                    </td>
+                                `).join('')}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        document.getElementById('comparisonContainer').innerHTML = html;
+    }
+</script>
+{% endblock %}
